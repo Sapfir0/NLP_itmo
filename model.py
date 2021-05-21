@@ -5,19 +5,15 @@ from catboost import CatBoostRegressor
 from sklearn.tree import ExtraTreeRegressor
 from sklearn.metrics import accuracy_score
 from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LinearRegression, Ridge
 from sklearn.tree import DecisionTreeRegressor
-from sklearn.ensemble import ExtraTreesRegressor, VotingRegressor
+from sklearn.ensemble import ExtraTreesRegressor, VotingRegressor, RandomForestRegressor
 from sklearn.neural_network import MLPRegressor
 from sklearn.preprocessing import PolynomialFeatures, StandardScaler
 from sklearn.pipeline import make_pipeline
 from sklearn.svm import SVC
-import tensorflow as tf
-from tensorflow import keras
-from tensorflow.keras import layers
-from keras.models import Sequential
-from keras.layers import Dense, Embedding, LSTM, SpatialDropout1D
-
+from sklearn.metrics import accuracy_score
 
 class Model:
     def __init__(self):
@@ -30,21 +26,40 @@ class Model:
         return ' '.join([self.morph.parse(w)[0].normal_form for w in words])
 
 
-    def getModel(_train, trueData, _test):
+    def getModel(self, _train, trueData):
+        X_train, X_test, y_train, y_test = train_test_split(_train, trueData, test_size=0.2, random_state=42)
+        print(y_train)
         models = [ 
-            CatBoostRegressor(learning_rate=0.03, iterations=1000, task_type="GPU", random_seed=42, eval_metric='Accuracy'),
-                
+            {
+                'model': CatBoostRegressor(
+                    task_type='GPU',
+                    random_state=42, 
+                    allow_const_label=True
+                ),
+                'fitParams': {'eval_set': (X_test, y_test), 'use_best_model': True}
+            },
+            {
+                'model': ExtraTreesRegressor(n_jobs=-1),
+                'fitParams': {}
+            }
         ]
 
         scores = []
 
-        for model in models:
-            model.fit(_train, trueData)
-            predictedData = model.predict(_test)
-            score = accuracy_score(trueData, predictedData)
+        for modelInfo in models:
+            model = modelInfo['model']
+            
+            # model.fit(_train, trueData, **modelInfo['fitParams'])
+            model.fit(X_train, y_train, **modelInfo['fitParams'])
+
+            predictedData = model.predict(X_test)
+            score = accuracy_score(y_test, np.round(np.clip(predictedData, 0, 1)))
             scores.append(score)
 
-        return models[scores.index(max(scores))]
+        bestIndex = scores.index(max(scores))
+        print(scores)
+
+        return models[bestIndex]['model']
 
 
 
@@ -65,13 +80,13 @@ class Model:
         _test = np.hstack([test_a, test_b])
 
 
-
+        model = self.getModel(_train, train["target"])
+        print(model)
+        model.fit(_train, train["target"])
+        predicted = model.predict(_test)
         
 
-
-
-        model.fit(_train, train["target"])
-        return pd.DataFrame(np.round(np.clip(model.predict(_test), 0, 1)), columns=["target"])
+        return pd.DataFrame(np.round(np.clip(predicted, 0, 1)), columns=["target"])
 
     def fit_predict(self,
                     train_1, test_1,

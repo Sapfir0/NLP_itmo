@@ -1,13 +1,18 @@
-from model import Model
 import pandas as pd
+from sklearn.metrics import accuracy_score
 
-m = Model()
+dataset = pd.DataFrame([["Первый текст для примера", "Второй текст для примера", 1],
+                        ["Третий текст для примера", "Четвертый текст для примера", 0]], columns=["message_a", "message_b", "target"])
 
-trainDict = {'message_a': ['sfasfa'], 'message_b': ['fafqwr11r'], 'target': [1]}
-train = pd.DataFrame(data=trainDict)
+train = dataset
+test = dataset[["message_a", "message_b"]]
 
-testDict = {'message_a': ['sfafafagasg'], 'message_b': ['fafqwr11r'], 'target': [0]}
-test = pd.DataFrame(data=testDict)
+true = [dataset[["target"]]] * 5
 
+from model import Model
 
-m._fit_predict(train, test)
+model = Model()
+pred = model.fit_predict(train, test, train, test, train, test, train, test, train, test)
+
+for i in range(5):
+    print(f"Task_{i}:", accuracy_score(true[i], pred[i]))
