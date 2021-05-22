@@ -109,24 +109,24 @@ class Model:
         vtrain, vtest = self.vectorize_data(train, test)
         X_train, X_test, y_train, y_test = train_test_split(vtrain, train['target'], test_size=0.2, random_state=42)
 
-        # scores = []
+        scores = []
 
-        # models = [ 
-        #     ExtraTreesRegressor(n_jobs=-1)
-        # ]
-        # for model in models:
-        #     model.fit(X_train, y_train)
-        #     predicted = model.predict(X_test)
-        #     score = accuracy_score(y_test, self.to_binary(predicted))
-        #     scores.append(score)
+        models = [ 
+            ExtraTreesRegressor(n_jobs=-1)
+        ]
+        for model in models:
+            model.fit(X_train, y_train)
+            predicted = model.predict(X_test)
+            score = accuracy_score(y_test, self.to_binary(predicted))
+            scores.append(score)
         
         catboost, catboost_score = self.predictCatboost(train, test)
-        # models.append(catboost)
-        # scores.append(catboost_score)
-
-        # bestIndex = scores.index(max(scores))
-        # return models[bestIndex]
-        return catboost
+        models.append(catboost)
+        scores.append(catboost_score[0])
+        print(scores)
+        bestIndex = scores.index(max(scores))
+        return models[bestIndex]
+        # return catboost
 
 
     def _fit_predict(self, train, test):
