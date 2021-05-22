@@ -79,23 +79,27 @@ class Model:
         model = CatBoostClassifier(
             verbose=False, 
             eval_metric='Accuracy',
-            task_type='GPU',
+            # task_type='GPU',
             **params
         )
         return model
 
+    def get_test_pool(self, test):
+        return Pool(
+            test,
+            text_features=['message_a', 'message_b'],
+            feature_names=['message_a', 'message_b'],
+        )
 
-    def predictCatboost(self, model, X_train, X_test, y_train):
+    def predict_catboost(self, model, X_train, X_test, y_train):
         learn_pool = Pool(
             X_train, y_train,
             text_features=['message_a', 'message_b'],
             feature_names=['message_a', 'message_b'],
         )
-        test_pool = Pool(
-            X_test,
-            text_features=['message_a', 'message_b'],
-            feature_names=['message_a', 'message_b'],
-        )
+
+        test_pool = self.get_test_pool(X_test)
+
 
         model.fit(learn_pool)
         predict = model.predict(test_pool)
@@ -110,9 +114,13 @@ class Model:
             {
                 'model': self._get_catboost_model(), 
                 'prepareDataCallback': self.normalize_data, 
-                'customFeat': self.predictCatboost,
+                'customFeat': self.predict_catboost,
+                'testDataGetter': self.get_test_pool
             },
-            {'model': ExtraTreesRegressor(n_jobs=-1), 'prepareDataCallback': self.vectorize_data }
+            {
+                'model': ExtraTreesRegressor(n_jobs=-1), 
+                'prepareDataCallback': self.vectorize_data 
+            }
         ]
 
         for modelInfo in models:
@@ -134,12 +142,19 @@ class Model:
         # return catboost
         return models[bestIndex]
 
+    def get_test_data_for_model(self, model_desc, train, test):
+        _, _test = model_desc['prepareDataCallback'](train, test)
+
+        if 'testDataGetter' in model_desc:
+            return model_desc['testDataGetter'](_test)
+        return _test
 
     def _fit_predict(self, train, test):
         model_desc = self.get_best_model(train, test)
         print(model_desc)
 
-        _, _test = model_desc['prepareDataCallback'](train, test)
+        _test = self.get_test_data_for_model(model_desc, train, test)
+
         predict = model_desc['model'].predict(_test)
         return pd.DataFrame(self.to_binary(predict), columns=["target"])
 
