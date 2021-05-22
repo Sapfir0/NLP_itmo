@@ -1,7 +1,9 @@
 import pandas as pd
 from sklearn.metrics import accuracy_score
 
-dataset = pd.DataFrame([["Первый текст для примера", "Второй текст для примера", 1],
+dataset = pd.DataFrame([["Первый текст для примера", "Второй текст для примера", 1], 
+                        ["fsafa", 'sfasfafa', 1],
+                        ['qgdfa daf', 'sfsag2v fs', 0],
                         ["Третий текст для примера", "Четвертый текст для примера", 0]], columns=["message_a", "message_b", "target"])
 
 train = dataset

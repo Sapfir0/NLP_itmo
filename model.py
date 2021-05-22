@@ -86,23 +86,25 @@ class Model:
 
 
     def predictCatboost(self, train, test):
-        X, test_fixed = self.normalize_data(train, test)
-        y = train['target']
+        train_fixed, test_fixed = self.normalize_data(train, test)
+        X_train, X_test, y_train, y_test = train_test_split(train_fixed, train['target'], test_size=0.2, random_state=42)
+
         model = self._get_catboost_model()
         learn_pool = Pool(
-            X, y,
+            X_train, y_train,
             text_features=['message_a', 'message_b'],
             feature_names=['message_a', 'message_b'],
         )
         test_pool = Pool(
-            test_fixed,
+            X_test,
             text_features=['message_a', 'message_b'],
             feature_names=['message_a', 'message_b'],
         )
 
         model.fit(learn_pool)
         predict = model.predict(test_pool)
-        return model, predict
+        score = accuracy_score(y_test, self.to_binary(predict))
+        return model, score
 
 
     def get_best_model(self, train, test):
@@ -117,21 +119,23 @@ class Model:
         for model in models:
             model.fit(X_train, y_train)
             predicted = model.predict(X_test)
+            print(y_test)
             score = accuracy_score(y_test, self.to_binary(predicted))
             scores.append(score)
         
         catboost, catboost_score = self.predictCatboost(train, test)
         models.append(catboost)
-        scores.append(catboost_score[0])
+        scores.append(catboost_score)
         print(scores)
         bestIndex = scores.index(max(scores))
-        return models[bestIndex]
         # return catboost
+        return models[bestIndex]
 
 
     def _fit_predict(self, train, test):
         model = self.get_best_model(train, test)
-        _, _test = self.normalize_data(train, test)
+        print(model)
+        _, _test = self.vectorize_data(train, test)
         predict = model.predict(_test)
         return pd.DataFrame(self.to_binary(predict), columns=["target"])
 
