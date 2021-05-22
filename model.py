@@ -79,17 +79,13 @@ class Model:
         model = CatBoostClassifier(
             verbose=False, 
             eval_metric='Accuracy',
-            # task_type='GPU',
+            task_type='GPU',
             **params
         )
         return model
 
 
-    def predictCatboost(self, train, test):
-        train_fixed, test_fixed = self.normalize_data(train, test)
-        X_train, X_test, y_train, y_test = train_test_split(train_fixed, train['target'], test_size=0.2, random_state=42)
-
-        model = self._get_catboost_model()
+    def predictCatboost(self, model, X_train, X_test, y_train):
         learn_pool = Pool(
             X_train, y_train,
             text_features=['message_a', 'message_b'],
@@ -103,29 +99,36 @@ class Model:
 
         model.fit(learn_pool)
         predict = model.predict(test_pool)
-        score = accuracy_score(y_test, self.to_binary(predict))
-        return model, score
+        return predict
 
 
     def get_best_model(self, train, test):
-        vtrain, vtest = self.vectorize_data(train, test)
-        X_train, X_test, y_train, y_test = train_test_split(vtrain, train['target'], test_size=0.2, random_state=42)
 
         scores = []
 
         models = [ 
-            ExtraTreesRegressor(n_jobs=-1)
+            {
+                'model': self._get_catboost_model(), 
+                'prepareDataCallback': self.normalize_data, 
+                'customFeat': self.predictCatboost,
+            },
+            {'model': ExtraTreesRegressor(n_jobs=-1), 'prepareDataCallback': self.vectorize_data }
         ]
-        for model in models:
-            model.fit(X_train, y_train)
-            predicted = model.predict(X_test)
-            print(y_test)
+
+        for modelInfo in models:
+            vtrain, vtest = modelInfo['prepareDataCallback'](train, test)
+            X_train, X_test, y_train, y_test = train_test_split(vtrain, train['target'], test_size=0.2, random_state=42)
+
+            model = modelInfo['model']
+            if 'customFeat' in modelInfo:
+                predicted = modelInfo['customFeat'](model, X_train, X_test, y_train) 
+            else:
+                model.fit(X_train, y_train)
+                predicted = model.predict(X_test)
+            
             score = accuracy_score(y_test, self.to_binary(predicted))
             scores.append(score)
         
-        catboost, catboost_score = self.predictCatboost(train, test)
-        models.append(catboost)
-        scores.append(catboost_score)
         print(scores)
         bestIndex = scores.index(max(scores))
         # return catboost
@@ -133,10 +136,11 @@ class Model:
 
 
     def _fit_predict(self, train, test):
-        model = self.get_best_model(train, test)
-        print(model)
-        _, _test = self.vectorize_data(train, test)
-        predict = model.predict(_test)
+        model_desc = self.get_best_model(train, test)
+        print(model_desc)
+
+        _, _test = model_desc['prepareDataCallback'](train, test)
+        predict = model_desc['model'].predict(_test)
         return pd.DataFrame(self.to_binary(predict), columns=["target"])
 
     def fit_predict(self,
