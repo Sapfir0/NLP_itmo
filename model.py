@@ -11,6 +11,8 @@ from sklearn.preprocessing import PolynomialFeatures
 from sklearn.pipeline import make_pipeline
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
+from sklearn.ensemble import ExtraTreesRegressor, VotingRegressor, RandomForestRegressor
+
 
 class Model:
     def __init__(self):
@@ -83,8 +85,7 @@ class Model:
         return model
 
 
-
-    def _fit_predict(self, train, test):
+    def predictCatboost(self, train, test):
         X, test_fixed = self.normalize_data(train, test)
         y = train['target']
         model = self._get_catboost_model()
@@ -99,11 +100,20 @@ class Model:
             feature_names=['message_a', 'message_b'],
         )
 
-        models = []
-
-
         model.fit(learn_pool)
         predict = model.predict(test_pool)
+        return predict
+
+    def _fit_predict(self, train, test):
+
+        X_train, X_test, y_train, y_test = train_test_split(train, train['target'], test_size=0.2, random_state=42)
+
+
+        scores = [self.predictCatboost(train, test)]
+
+        models = [ExtraTreesRegressor(n_jobs=-1)]
+        for model in models:
+
         return pd.DataFrame(self.to_binary(predict), columns=["target"])
 
     def fit_predict(self,
