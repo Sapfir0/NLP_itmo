@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import pymorphy2
+from sklearn import model_selection
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import ExtraTreesClassifier, RandomForestClassifier
 from sklearn.naive_bayes import GaussianNB
@@ -16,12 +17,15 @@ class Model:
         self.morph = pymorphy2.MorphAnalyzer()
         self.alphabet = 'abcdefghijklmnopqrstuvwxyzабвгдежзийклмнопрстуфхцчшщъыьэюя .'
 
+    def to_binary(self, predicted):
+        return np.round(np.clip(predicted, 0, 1))
+
     def normalize_text_with_morph(self, x):
         x = x.lower().replace("ё", "е")
         words = ''.join([[" ", i][i in self.alphabet] for i in x]).lower().split()
         return ' '.join([self.morph.parse(w)[0].normal_form for w in words])
 
-    def prepare_test_train(self, train, test):
+    def normalize_data(self, train, test):
         train["message_a"] = train["message_a"].apply(self.normalize_text_with_morph)
         train["message_b"] = train["message_b"].apply(self.normalize_text_with_morph)
         test["message_a"] = test["message_a"].apply(self.normalize_text_with_morph)
@@ -29,10 +33,36 @@ class Model:
 
         return train[['message_a', 'message_b']], test[['message_a', 'message_b']]
 
-    def _fit_predict(self, train, test):
-        X, test_fixed = self.prepare_test_train(train, test)
-        y = train['target']
+
+    def vectorize_data(self, train, test):
+        vectorizer_a = TfidfVectorizer(max_features=1000)
+        vectorizer_b = TfidfVectorizer(max_features=1000)
+
+        train["message_a"] = train["message_a"].apply(self.normalize_text_with_morph)
+        train["message_b"] = train["message_b"].apply(self.normalize_text_with_morph)
+        train_a = vectorizer_a.fit_transform(train["message_a"]).toarray()
+        train_b = vectorizer_b.fit_transform(train["message_b"]).toarray()
+        _train = np.hstack([train_a, train_b])
+
+        test["message_a"] = test["message_a"].apply(self.normalize_text_with_morph)
+        test["message_b"] = test["message_b"].apply(self.normalize_text_with_morph)
+        test_a = vectorizer_a.transform(test["message_a"]).toarray()
+        test_b = vectorizer_b.transform(test["message_b"]).toarray()
+        _test = np.hstack([test_a, test_b])
+        return  _train, _test
+
+
+    def _get_catboost_model(self):
         params = {
+            'tokenizers': [
+                {
+                    'tokenizer_id': 'Sense',
+                    'separator_type': 'BySense',
+                    'lowercasing': 'True',
+                    'token_types':['Word', 'Number', 'SentenceBreak'],
+                    'sub_tokens_policy':'SeveralTokens'
+                }      
+            ],
             'dictionaries': [
                 {
                     'dictionary_id': 'Word',
@@ -41,16 +71,23 @@ class Model:
                 }
             ],
             'feature_calcers': [
-                'BoW:top_tokens_count=10000'
+                'BoW:top_tokens_count=10000',
             ]
         }
         model = CatBoostClassifier(
-            verbose=100, 
-            loss_function='CrossEntropy', 
+            verbose=False, 
             eval_metric='Accuracy',
             task_type='GPU',
             **params
         )
+        return model
+
+
+
+    def _fit_predict(self, train, test):
+        X, test_fixed = self.normalize_data(train, test)
+        y = train['target']
+        model = self._get_catboost_model()
         learn_pool = Pool(
             X, y,
             text_features=['message_a', 'message_b'],
@@ -62,9 +99,12 @@ class Model:
             feature_names=['message_a', 'message_b'],
         )
 
+        models = []
+
+
         model.fit(learn_pool)
         predict = model.predict(test_pool)
-        return pd.DataFrame(np.round(np.clip(predict, 0, 1)), columns=["target"])
+        return pd.DataFrame(self.to_binary(predict), columns=["target"])
 
     def fit_predict(self,
                     train_1, test_1,
