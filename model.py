@@ -79,7 +79,7 @@ class Model:
         model = CatBoostClassifier(
             verbose=False, 
             eval_metric='Accuracy',
-            task_type='GPU',
+            # task_type='GPU',
             **params
         )
         return model
@@ -102,18 +102,37 @@ class Model:
 
         model.fit(learn_pool)
         predict = model.predict(test_pool)
-        return predict
+        return model, predict
+
+
+    def get_best_model(self, train, test):
+        vtrain, vtest = self.vectorize_data(train, test)
+        X_train, X_test, y_train, y_test = train_test_split(vtrain, train['target'], test_size=0.2, random_state=42)
+
+        # scores = []
+
+        # models = [ 
+        #     ExtraTreesRegressor(n_jobs=-1)
+        # ]
+        # for model in models:
+        #     model.fit(X_train, y_train)
+        #     predicted = model.predict(X_test)
+        #     score = accuracy_score(y_test, self.to_binary(predicted))
+        #     scores.append(score)
+        
+        catboost, catboost_score = self.predictCatboost(train, test)
+        # models.append(catboost)
+        # scores.append(catboost_score)
+
+        # bestIndex = scores.index(max(scores))
+        # return models[bestIndex]
+        return catboost
+
 
     def _fit_predict(self, train, test):
-
-        X_train, X_test, y_train, y_test = train_test_split(train, train['target'], test_size=0.2, random_state=42)
-
-
-        scores = [self.predictCatboost(train, test)]
-
-        models = [ExtraTreesRegressor(n_jobs=-1)]
-        for model in models:
-
+        model = self.get_best_model(train, test)
+        _, _test = self.normalize_data(train, test)
+        predict = model.predict(_test)
         return pd.DataFrame(self.to_binary(predict), columns=["target"])
 
     def fit_predict(self,
