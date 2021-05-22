@@ -69,7 +69,7 @@ class Model:
                 {
                     'dictionary_id': 'Word',
                     'max_dictionary_size': '50000',
-                    "occurrence_lower_bound" : "2",
+                    "occurrence_lower_bound" : "1",
                 }
             ],
             'feature_calcers': [
@@ -79,7 +79,7 @@ class Model:
         model = CatBoostClassifier(
             verbose=False, 
             eval_metric='Accuracy',
-            # task_type='GPU',
+            task_type='GPU',
             **params
         )
         return model
@@ -107,7 +107,6 @@ class Model:
 
 
     def get_best_model(self, train, test):
-
         scores = []
 
         models = [ 
