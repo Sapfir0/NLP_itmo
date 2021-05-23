@@ -134,6 +134,8 @@ test = dataset[["message_a", "message_b"]]
 true = [dataset[["target"]]] * 5
 
 from model import Model
+# from baseline.keras import Model
+# from baseline.boosted_Baseline import Model
 
 model = Model()
 pred = model.fit_predict(train, test, train, test, train, test, train, test, train, test)

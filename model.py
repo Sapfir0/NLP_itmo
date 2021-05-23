@@ -12,7 +12,7 @@ from sklearn.pipeline import make_pipeline
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
 from sklearn.ensemble import ExtraTreesRegressor, VotingRegressor, RandomForestRegressor
-
+from tensorflow import keras
 
 class Model:
     def __init__(self):
@@ -100,14 +100,34 @@ class Model:
 
         test_pool = self.get_test_pool(X_test)
 
-
         model.fit(learn_pool)
         predict = model.predict(test_pool)
         return predict
 
+    def get_LTSM_model(self, input_shape):
+        model = keras.Sequential([
+            keras.layers.Input(shape=input_shape),
+            keras.layers.LSTM(40, return_sequences=True),
+            keras.layers.LSTM(40),
+            keras.layers.Dense(20, activation='relu'),
+            keras.layers.Dense(1, activation='hard_sigmoid'),
+        ])
+        model.summary()
+        model.compile(optimizer='adam',
+              loss='mse',
+              metrics=['accuracy'])
+        return model
+
+    def prepare_LTSM_data(self, train, test):
+        X, vtest = self.vectorize_data(train, test)
+        X = np.reshape(X, (X.shape[0], 2, X.shape[1]//2))
+        vtest = np.reshape(vtest, (vtest.shape[0], 2, vtest.shape[1]//2))
+        return X, vtest
 
     def get_best_model(self, train, test):
         scores = []
+        X, vtest = self.prepare_LTSM_data(train, test)
+        input_shape = (X.shape[-2], X.shape[-1])
 
         models = [ 
             {
@@ -117,14 +137,16 @@ class Model:
                 'testDataGetter': self.get_test_pool
             },
             {
-                'model': ExtraTreesRegressor(n_jobs=-1), 
-                'prepareDataCallback': self.vectorize_data 
+                'model': self.get_LTSM_model(input_shape), 
+                'prepareDataCallback': self.prepare_LTSM_data,
+                 
             }
         ]
+        y = train['target']
 
         for modelInfo in models:
             vtrain, vtest = modelInfo['prepareDataCallback'](train, test)
-            X_train, X_test, y_train, y_test = train_test_split(vtrain, train['target'], test_size=0.2, random_state=42)
+            X_train, X_test, y_train, y_test = train_test_split(vtrain, y, test_size=0.2, random_state=42)
 
             model = modelInfo['model']
             if 'customFeat' in modelInfo:
